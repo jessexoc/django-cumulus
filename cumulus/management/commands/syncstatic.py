@@ -27,6 +27,7 @@ class Command(BaseCommand):
     USE_SERVICENET   = CUMULUS['SERVICENET']
     FILTER_LIST      = CUMULUS['FILTER_LIST']
     AUTH_URL         = CUMULUS['AUTH_URL']
+    RETRIES          = CUMULUS['RETRIES']
 
     # paths
     DIRECTORY        = os.path.abspath(settings.STATIC_ROOT)
@@ -54,15 +55,8 @@ class Command(BaseCommand):
         self.sync_files()
 
     def sync_files(self):
-        self.conn = cloudfiles.get_connection(username = self.USERNAME,
-                                              api_key = self.API_KEY,
-                                              authurl = self.AUTH_URL,
-                                              servicenet=self.USE_SERVICENET)
-                                              
-        try:
-            self.container = self.conn.get_container(self.STATIC_CONTAINER)
-        except cloudfiles.errors.NoSuchContainer:
-            self.container = self.conn.create_container(self.STATIC_CONTAINER)
+        # start the cloud files connection & get container
+        self._init_connection()
 
         if not self.container.is_public():
             self.container.make_public()
@@ -73,8 +67,9 @@ class Command(BaseCommand):
                 print "Wipe would delete %d objects." % self.container.object_count
             else:
                 print "Deleting %d objects..." % self.container.object_count
-                for cloud_obj in self.container.get_objects():
-                    self.container.delete_object(cloud_obj.name)
+                get_objects = self._container_operation(self.container.get_objects)
+                for cloud_obj in get_objects:
+                    self._container_operation(self.container.delete_object, cloud_obj.name)
 
         # walk through the directory, creating or updating files on the cloud
         os.path.walk(self.DIRECTORY, self.upload_files, "foo")
@@ -104,9 +99,9 @@ class Command(BaseCommand):
             self.local_object_names.append(object_name)
 
             try:
-                cloud_obj = self.container.get_object(object_name)
+                cloud_obj = self._container_operation(self.container.get_object, object_name)
             except cloudfiles.errors.NoSuchObject:
-                cloud_obj = self.container.create_object(object_name)
+                cloud_obj = self._container_operation(self.container.create_object, object_name)
                 self.create_count += 1
 
             cloud_datetime = (cloud_obj.last_modified and
@@ -130,10 +125,60 @@ class Command(BaseCommand):
 
     def delete_files(self):
         # remove any objects on the cloud that don't exist locally
-        for cloud_name in self.container.list_objects():
+        list_objects = self._container_operation(self.container.list_objects)
+        for cloud_name in list_objects:
             if cloud_name not in self.local_object_names:
                 self.delete_count += 1
                 if self.verbosity > 1:
                     print "Deleted %s" % cloud_name
                 if not self.test_run:
-                    self.container.delete_object(cloud_name)
+                    self._container_operation(self.container.delete_object, cloud_name)
+
+    def _container_operation(self, func, *args, **kwargs):
+        """ 
+        Rackspace CloudFiles API calls can be unreliable so this will make sure that a 
+        CloudFiles operation is retried a number of times before finally excepting out. 
+        
+        Instead of making calls to:
+            self.container.FUNC(ARGS, KWARGS) 
+        Call this function:
+            self._container_operation(self.container.FUNC, ARGS, KWARGS)
+        """
+        retries = self.RETRIES
+        failures = 0
+        while 1:
+            try:
+                return func(*args, **kwargs)
+            except SSLError as e:
+                # More connection error exceptions can be added here, but make sure to only catch
+                # exceptions to HTTP/SSL errors as cloudfiles based exceptions should cascade up. 
+                failures += 1
+                print "ERROR: '%s' (%d of %d allowed errors)." % (repr(e), failures, retries)
+                if failures >= retires:
+                    raise CumulusException("Multiple failures when attempting to execute %s(%s, %s)", 
+                                    func.func_name, str(args), str(kwargs))
+                print "Restarting connection"
+                self._init_connection()
+        
+    def _init_connection(self):
+        """ 
+        (re)initialize the cloudfiles connection & update the container's connection if the container
+        has been created already
+        """
+        self.conn = cloudfiles.get_connection(username = self.USERNAME,
+                                              api_key = self.API_KEY,
+                                              authurl = self.AUTH_URL,
+                                              servicenet=self.USE_SERVICENET)
+        if self.container is None:
+            # container instance not created yet so fetch it (or create it)
+            try:
+                self.container = self.conn.get_container(self.STATIC_CONTAINER)
+            except cloudfiles.errors.NoSuchContainer:
+                self.container = self.conn.create_container(self.STATIC_CONTAINER)
+        else:
+            # update the container's internal connection to the new fresh connection.
+            self.container.conn = self.conn
+
+
+class CumulusException(Exception):
+    pass

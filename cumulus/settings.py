@@ -13,7 +13,8 @@ CUMULUS = {
     'USE_SSL': False,
     'USERNAME': None,
     'STATIC_CONTAINER': None,
-    'FILTER_LIST': []
+    'FILTER_LIST': [],
+    'RETRIES':5,
 }
 
 if hasattr(settings, 'CUMULUS'):
@@ -38,4 +39,5 @@ if not hasattr(settings, 'CUMULUS'):
         'TIMEOUT': getattr(settings, 'CUMULUS_TIMEOUT', 5),
         'TTL': getattr(settings, 'CUMULUS_TTL', 600),
         'USERNAME': getattr(settings, 'CUMULUS_USERNAME'),
+        'RETRIES': setattr(settings, 'CUMULUS_RETRIES', 5),
     })
