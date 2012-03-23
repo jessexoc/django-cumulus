@@ -189,6 +189,7 @@ Below are the default settings::
         'SERVICENET': False,
         'TIMEOUT': 5,
         'TTL': 600,
+        'RETRIES': 5,
         'USE_SSL': False,
         'USERNAME': None,
         'STATIC_CONTAINER': None,
@@ -247,6 +248,11 @@ TTL
 ---
 
 Currently unused.
+
+RETRES
+------
+
+How many times to retry a failed container API call. Defaults to 5 times per opration.
 
 USE_SSL
 -------

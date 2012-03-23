@@ -10,11 +10,11 @@ CUMULUS = {
     'SERVICENET': False,
     'TIMEOUT': 5,
     'TTL': 600,
+    'RETRIES':5,
     'USE_SSL': False,
     'USERNAME': None,
     'STATIC_CONTAINER': None,
-    'FILTER_LIST': [],
-    'RETRIES':5,
+    'FILTER_LIST': []
 }
 
 if hasattr(settings, 'CUMULUS'):
@@ -38,6 +38,6 @@ if not hasattr(settings, 'CUMULUS'):
         'SERVICENET': getattr(settings, 'CUMULUS_USE_SERVICENET', False),
         'TIMEOUT': getattr(settings, 'CUMULUS_TIMEOUT', 5),
         'TTL': getattr(settings, 'CUMULUS_TTL', 600),
-        'USERNAME': getattr(settings, 'CUMULUS_USERNAME'),
         'RETRIES': setattr(settings, 'CUMULUS_RETRIES', 5),
+        'USERNAME': getattr(settings, 'CUMULUS_USERNAME'),
     })

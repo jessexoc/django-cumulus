@@ -144,7 +144,6 @@ class Command(BaseCommand):
         Call this function:
             self._container_operation(self.container.FUNC, ARGS, KWARGS)
         """
-        retries = self.RETRIES
         failures = 0
         while 1:
             try:
@@ -154,7 +153,7 @@ class Command(BaseCommand):
                 # exceptions to HTTP/SSL errors as cloudfiles based exceptions should cascade up. 
                 failures += 1
                 print "ERROR: '%s' (%d of %d allowed errors)." % (repr(e), failures, retries)
-                if failures >= retires:
+                if failures >= self.RETRIES:
                     raise CumulusException("Multiple failures when attempting to execute %s(%s, %s)", 
                                     func.func_name, str(args), str(kwargs))
                 print "Restarting connection"
